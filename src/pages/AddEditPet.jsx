@@ -33,6 +33,7 @@ export default function AddEditPet() {
   const [medications, setMedications] = useState([]);
   const [showMedForm, setShowMedForm] = useState(false);
   const [newMed, setNewMed] = useState(defaultMed);
+  const [editingMedId, setEditingMedId] = useState(null);
   const [activeSection, setActiveSection] = useState('basic');
   const [loading, setLoading] = useState(isEditing);
   const [submitting, setSubmitting] = useState(false);
@@ -68,11 +69,37 @@ export default function AddEditPet() {
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const handleMedChange = (e) => setNewMed({ ...newMed, [e.target.name]: e.target.value });
 
+  function startEditMedication(med) {
+    setEditingMedId(med.id);
+    setNewMed({
+      medication_name: med.medication_name || '',
+      dosage: med.dosage || '',
+      route: med.route || 'Oral',
+      schedule_time: med.schedule_time || '',
+      special_instructions: med.special_instructions || '',
+    });
+    setShowMedForm(true);
+  }
+
   async function addMedication() {
     if (!newMed.medication_name.trim()) return;
     setError('');
 
-    if (isEditing) {
+    if (editingMedId) {
+      if (isEditing && !String(editingMedId).startsWith('temp-')) {
+        const { data, error } = await supabase
+          .from('medications')
+          .update(newMed)
+          .eq('id', editingMedId)
+          .select()
+          .single();
+        if (error) { setError('Failed to update medication: ' + error.message); return; }
+        setMedications(medications.map((m) => (m.id === editingMedId ? data : m)));
+      } else {
+        setMedications(medications.map((m) => (m.id === editingMedId ? { ...m, ...newMed } : m)));
+      }
+      setEditingMedId(null);
+    } else if (isEditing) {
       const { data, error } = await supabase
         .from('medications')
         .insert({ ...newMed, pet_id: id })
@@ -372,7 +399,7 @@ export default function AddEditPet() {
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  onClick={() => setShowMedForm(!showMedForm)}
+                  onClick={() => { setShowMedForm(!showMedForm); setEditingMedId(null); setNewMed(defaultMed); }}
                   style={{ borderRadius: 8 }}
                 >
                   {showMedForm ? 'Cancel' : '+ Add'}
@@ -405,20 +432,31 @@ export default function AddEditPet() {
                       </p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-danger btn-sm btn-icon"
-                    onClick={() => removeMedication(med.id)}
-                    style={{ width: 32, height: 32, fontSize: '1rem', marginLeft: 8 }}
-                  >
-                    ×
-                  </button>
+                  <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm btn-icon"
+                      onClick={() => startEditMedication(med)}
+                      style={{ width: 32, height: 32, fontSize: '0.875rem' }}
+                      title="Edit medication"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm btn-icon"
+                      onClick={() => removeMedication(med.id)}
+                      style={{ width: 32, height: 32, fontSize: '1rem' }}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
               ))}
 
               {showMedForm && (
                 <div className="card" style={{ marginTop: 8, padding: 16, background: 'var(--primary-light)', border: '1.5px solid var(--primary)' }}>
-                  <h3 style={{ marginBottom: 14, color: 'var(--primary)' }}>New Medication</h3>
+                  <h3 style={{ marginBottom: 14, color: 'var(--primary)' }}>{editingMedId ? 'Edit Medication' : 'New Medication'}</h3>
                   <div className="form-group">
                     <label className="form-label">Medication name *</label>
                     <input
@@ -453,7 +491,7 @@ export default function AddEditPet() {
                     <textarea name="special_instructions" className="form-textarea" placeholder="Any important notes..." value={newMed.special_instructions} onChange={handleMedChange} style={{ minHeight: 60 }} />
                   </div>
                   <button type="button" className="btn btn-primary btn-full" onClick={addMedication}>
-                    Add Medication
+                    {editingMedId ? 'Save Changes' : 'Add Medication'}
                   </button>
                 </div>
               )}
