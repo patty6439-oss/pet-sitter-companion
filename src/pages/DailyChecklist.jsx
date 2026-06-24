@@ -148,8 +148,8 @@ export default function DailyChecklist() {
         pet_id: id,
         task_name: newTask.task_name.trim(),
         task_type: newTask.task_type,
-        scheduled_time: newTask.scheduled_time.trim() || null,
-        instructions: newTask.instructions.trim() || null,
+        scheduled_time: newTask.scheduled_time.trim() || '',
+        instructions: newTask.instructions.trim() || '',
       })
       .select()
       .single();

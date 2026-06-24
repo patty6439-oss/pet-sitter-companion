@@ -42,12 +42,14 @@ export default function AddEditPet() {
 
   useEffect(() => {
     if (!isEditing) return;
+    let cancelled = false;
     supabase
       .from('pets')
       .select('*, medications(*)')
       .eq('id', id)
       .single()
       .then(({ data, error }) => {
+        if (cancelled) return;
         if (error || !data) { setError('Pet not found.'); setLoading(false); return; }
         setPetName(data.name);
         setForm({
@@ -63,11 +65,18 @@ export default function AddEditPet() {
         setMedications(data.medications || []);
         setLoading(false);
       });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-  const handleMedChange = (e) => setNewMed({ ...newMed, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+  const handleMedChange = (e) => {
+    const { name, value } = e.target;
+    setNewMed(prev => ({ ...prev, [name]: value }));
+  };
 
   function startEditMedication(med) {
     setEditingMedId(med.id);
