@@ -1,67 +1,172 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { supabase } from '../supabase';
+import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
-import { samplePets } from '../data/sampleData';
 
 const defaultForm = {
   name: '',
   species: 'Dog',
   breed: '',
   age: '',
-  feedingInstructions: '',
-  approvedFoods: '',
-  forbiddenFoods: '',
-  emergencyNotes: '',
+  feeding_instructions: '',
+  approved_foods: '',
+  forbidden_foods: '',
+  emergency_notes: '',
 };
 
-const defaultMed = { name: '', dosage: '', route: 'Oral', scheduleTime: '', specialInstructions: '' };
+const defaultMed = {
+  medication_name: '',
+  dosage: '',
+  route: 'Oral',
+  schedule_time: '',
+  special_instructions: '',
+};
 
 export default function AddEditPet() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
   const isEditing = Boolean(id);
-  const existingPet = isEditing ? samplePets.find((p) => p.id === id) : null;
 
-  const [form, setForm] = useState(
-    isEditing && existingPet
-      ? {
-          name: existingPet.name,
-          species: existingPet.species,
-          breed: existingPet.breed,
-          age: String(existingPet.age),
-          feedingInstructions: existingPet.feedingInstructions,
-          approvedFoods: existingPet.approvedFoods,
-          forbiddenFoods: existingPet.forbiddenFoods,
-          emergencyNotes: existingPet.emergencyNotes,
-        }
-      : defaultForm
-  );
-
-  const [medications, setMedications] = useState(
-    isEditing && existingPet ? existingPet.medications : []
-  );
+  const [form, setForm] = useState(defaultForm);
+  const [medications, setMedications] = useState([]);
   const [showMedForm, setShowMedForm] = useState(false);
   const [newMed, setNewMed] = useState(defaultMed);
   const [activeSection, setActiveSection] = useState('basic');
+  const [loading, setLoading] = useState(isEditing);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [petName, setPetName] = useState('');
+
+  useEffect(() => {
+    if (!isEditing) return;
+    supabase
+      .from('pets')
+      .select('*, medications(*)')
+      .eq('id', id)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) { setError('Pet not found.'); setLoading(false); return; }
+        setPetName(data.name);
+        setForm({
+          name: data.name || '',
+          species: data.species || 'Dog',
+          breed: data.breed || '',
+          age: data.age != null ? String(data.age) : '',
+          feeding_instructions: data.feeding_instructions || '',
+          approved_foods: data.approved_foods || '',
+          forbidden_foods: data.forbidden_foods || '',
+          emergency_notes: data.emergency_notes || '',
+        });
+        setMedications(data.medications || []);
+        setLoading(false);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const handleMedChange = (e) => setNewMed({ ...newMed, [e.target.name]: e.target.value });
 
-  const addMedication = () => {
-    if (!newMed.name) return;
-    setMedications([...medications, { ...newMed, id: String(Date.now()) }]);
+  async function addMedication() {
+    if (!newMed.medication_name.trim()) return;
+    setError('');
+
+    if (isEditing) {
+      const { data, error } = await supabase
+        .from('medications')
+        .insert({ ...newMed, pet_id: id })
+        .select()
+        .single();
+
+      if (error) {
+        setError('Failed to add medication: ' + error.message);
+        return;
+      }
+      setMedications([...medications, data]);
+    } else {
+      setMedications([...medications, { ...newMed, id: `temp-${Date.now()}` }]);
+    }
+
     setNewMed(defaultMed);
     setShowMedForm(false);
-  };
+  }
 
-  const removeMedication = (medId) => {
+  async function removeMedication(medId) {
+    if (isEditing && !String(medId).startsWith('temp-')) {
+      const { error } = await supabase.from('medications').delete().eq('id', medId);
+      if (error) {
+        setError('Failed to remove medication: ' + error.message);
+        return;
+      }
+    }
     setMedications(medications.filter((m) => m.id !== medId));
-  };
+  }
 
-  const handleSubmit = (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
+    if (!form.name.trim()) {
+      setError('Pet name is required.');
+      return;
+    }
+    setError('');
+    setSubmitting(true);
+
+    const petData = {
+      name: form.name.trim(),
+      species: form.species,
+      breed: form.breed.trim() || null,
+      age: form.age !== '' ? parseInt(form.age, 10) : null,
+      feeding_instructions: form.feeding_instructions.trim() || null,
+      approved_foods: form.approved_foods.trim() || null,
+      forbidden_foods: form.forbidden_foods.trim() || null,
+      emergency_notes: form.emergency_notes.trim() || null,
+      photo_url: null,
+    };
+
+    if (isEditing) {
+      const { error } = await supabase.from('pets').update(petData).eq('id', id);
+      if (error) {
+        setError('Failed to update pet: ' + error.message);
+        setSubmitting(false);
+        return;
+      }
+    } else {
+      const { data: newPet, error } = await supabase
+        .from('pets')
+        .insert({ ...petData, user_id: user.id })
+        .select()
+        .single();
+
+      if (error) {
+        setError('Failed to create pet: ' + error.message);
+        setSubmitting(false);
+        return;
+      }
+
+      const tempMeds = medications.filter((m) => String(m.id).startsWith('temp-'));
+      if (tempMeds.length > 0) {
+        const medsToInsert = tempMeds.map((med) => ({
+        medication_name: med.medication_name,
+        dosage: med.dosage,
+        route: med.route,
+        schedule_time: med.schedule_time,
+        special_instructions: med.special_instructions,
+        pet_id: newPet.id,
+      }));
+        const { error: medError } = await supabase.from('medications').insert(medsToInsert);
+        if (medError) {
+          setError('Pet saved but could not save medications: ' + medError.message);
+          setSubmitting(false);
+          navigate('/dashboard');
+          return;
+        }
+      }
+    }
+
+    setSubmitting(false);
     navigate('/dashboard');
-  };
+  }
 
   const sections = [
     { key: 'basic', label: '🐾 Basic Info' },
@@ -69,14 +174,21 @@ export default function AddEditPet() {
     { key: 'medical', label: '💊 Medical' },
   ];
 
+  if (loading) {
+    return (
+      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="page" style={{ paddingBottom: 0 }}>
       <PageHeader
-        title={isEditing ? `Edit ${existingPet?.name || 'Pet'}` : 'Add New Pet'}
+        title={isEditing ? `Edit ${petName || 'Pet'}` : 'Add New Pet'}
         backTo="/dashboard"
       />
 
-      {/* Section tabs */}
       <div
         style={{
           display: 'flex',
@@ -109,11 +221,15 @@ export default function AddEditPet() {
         ))}
       </div>
 
+      {error && (
+        <div style={{ margin: '12px 16px 0', background: 'var(--danger-light)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 8, fontSize: '0.875rem' }}>
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto' }}>
-        {/* Basic Info */}
         {activeSection === 'basic' && (
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {/* Photo placeholder */}
             <div
               style={{
                 width: '100%',
@@ -125,13 +241,12 @@ export default function AddEditPet() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginBottom: 20,
-                cursor: 'pointer',
                 gap: 8,
               }}
             >
               <span style={{ fontSize: '3rem' }}>📷</span>
               <span style={{ color: 'white', fontWeight: 600 }}>Add Photo</span>
-              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8125rem' }}>Tap to upload</span>
+              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8125rem' }}>Coming soon</span>
             </div>
 
             <div className="form-group">
@@ -195,62 +310,53 @@ export default function AddEditPet() {
           </div>
         )}
 
-        {/* Care instructions */}
         {activeSection === 'care' && (
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 0 }}>
             <div className="form-group">
-              <label className="form-label" htmlFor="feedingInstructions">
-                Feeding Instructions *
-              </label>
+              <label className="form-label" htmlFor="feeding_instructions">Feeding Instructions</label>
               <textarea
-                id="feedingInstructions"
-                name="feedingInstructions"
+                id="feeding_instructions"
+                name="feeding_instructions"
                 className="form-textarea"
                 placeholder="How much food, how often, specific brands, water requirements..."
-                value={form.feedingInstructions}
+                value={form.feeding_instructions}
                 onChange={handleChange}
                 style={{ minHeight: 100 }}
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="approvedFoods">
-                ✅ Approved Foods
-              </label>
+              <label className="form-label" htmlFor="approved_foods">✅ Approved Foods</label>
               <textarea
-                id="approvedFoods"
-                name="approvedFoods"
+                id="approved_foods"
+                name="approved_foods"
                 className="form-textarea"
                 placeholder="Safe treats and human foods (carrots, apples...)"
-                value={form.approvedFoods}
+                value={form.approved_foods}
                 onChange={handleChange}
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="forbiddenFoods">
-                🚫 Forbidden Foods
-              </label>
+              <label className="form-label" htmlFor="forbidden_foods">🚫 Forbidden Foods</label>
               <textarea
-                id="forbiddenFoods"
-                name="forbiddenFoods"
+                id="forbidden_foods"
+                name="forbidden_foods"
                 className="form-textarea"
                 placeholder="Dangerous or toxic foods to avoid..."
-                value={form.forbiddenFoods}
+                value={form.forbidden_foods}
                 onChange={handleChange}
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="emergencyNotes">
-                🚨 Emergency / Special Notes
-              </label>
+              <label className="form-label" htmlFor="emergency_notes">🚨 Emergency / Special Notes</label>
               <textarea
-                id="emergencyNotes"
-                name="emergencyNotes"
+                id="emergency_notes"
+                name="emergency_notes"
                 className="form-textarea"
                 placeholder="Allergies, behavioral notes, emergency contacts, vet info..."
-                value={form.emergencyNotes}
+                value={form.emergency_notes}
                 onChange={handleChange}
                 style={{ minHeight: 100 }}
               />
@@ -258,7 +364,6 @@ export default function AddEditPet() {
           </div>
         )}
 
-        {/* Medical / Medications */}
         {activeSection === 'medical' && (
           <div style={{ padding: 16 }}>
             <div style={{ marginBottom: 16 }}>
@@ -289,14 +394,14 @@ export default function AddEditPet() {
                 >
                   <div style={{ flex: 1 }}>
                     <p style={{ fontWeight: 600, margin: '0 0 4px', color: 'var(--text)' }}>
-                      💊 {med.name}
+                      💊 {med.medication_name}
                     </p>
                     <p style={{ fontSize: '0.8125rem', margin: '0 0 2px', color: 'var(--text-muted)' }}>
-                      {med.dosage} · {med.route} · {med.scheduleTime}
+                      {[med.dosage, med.route, med.schedule_time].filter(Boolean).join(' · ')}
                     </p>
-                    {med.specialInstructions && (
+                    {med.special_instructions && (
                       <p style={{ fontSize: '0.75rem', margin: 0, color: 'var(--text-light)', fontStyle: 'italic' }}>
-                        {med.specialInstructions}
+                        {med.special_instructions}
                       </p>
                     )}
                   </div>
@@ -318,10 +423,10 @@ export default function AddEditPet() {
                     <label className="form-label">Medication name *</label>
                     <input
                       type="text"
-                      name="name"
+                      name="medication_name"
                       className="form-input"
                       placeholder="e.g. Apoquel"
-                      value={newMed.name}
+                      value={newMed.medication_name}
                       onChange={handleMedChange}
                     />
                   </div>
@@ -341,11 +446,11 @@ export default function AddEditPet() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Schedule / Time</label>
-                    <input type="text" name="scheduleTime" className="form-input" placeholder="Morning with food" value={newMed.scheduleTime} onChange={handleMedChange} />
+                    <input type="text" name="schedule_time" className="form-input" placeholder="Morning with food" value={newMed.schedule_time} onChange={handleMedChange} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Special instructions</label>
-                    <textarea name="specialInstructions" className="form-textarea" placeholder="Any important notes..." value={newMed.specialInstructions} onChange={handleMedChange} style={{ minHeight: 60 }} />
+                    <textarea name="special_instructions" className="form-textarea" placeholder="Any important notes..." value={newMed.special_instructions} onChange={handleMedChange} style={{ minHeight: 60 }} />
                   </div>
                   <button type="button" className="btn btn-primary btn-full" onClick={addMedication}>
                     Add Medication
@@ -356,7 +461,6 @@ export default function AddEditPet() {
           </div>
         )}
 
-        {/* Sticky footer CTA */}
         <div
           style={{
             position: 'sticky',
@@ -373,11 +477,12 @@ export default function AddEditPet() {
             className="btn btn-ghost"
             style={{ flex: 1 }}
             onClick={() => navigate(-1)}
+            disabled={submitting}
           >
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>
-            {isEditing ? 'Save Changes' : 'Add Pet'} 🐾
+          <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={submitting}>
+            {submitting ? 'Saving...' : isEditing ? 'Save Changes 🐾' : 'Add Pet 🐾'}
           </button>
         </div>
       </form>

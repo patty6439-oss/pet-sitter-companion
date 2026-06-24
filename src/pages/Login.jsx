@@ -1,15 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { user, signIn, loading } = useAuth();
   const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!loading && user) navigate('/dashboard', { replace: true });
+  }, [user, loading, navigate]);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate('/dashboard');
+    setError('');
+    setSubmitting(true);
+    const { error } = await signIn(form.email, form.password);
+    setSubmitting(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      navigate('/dashboard', { replace: true });
+    }
   };
 
   return (
@@ -24,6 +40,12 @@ export default function Login() {
         <h2 className="auth-title">Welcome back</h2>
         <p className="auth-subtitle">Sign in to manage your pets</p>
 
+        {error && (
+          <div style={{ background: 'var(--danger-light)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 8, fontSize: '0.875rem', marginBottom: 16 }}>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email address</label>
@@ -36,6 +58,7 @@ export default function Login() {
               value={form.email}
               onChange={handleChange}
               autoComplete="email"
+              required
             />
           </div>
 
@@ -50,6 +73,7 @@ export default function Login() {
               value={form.password}
               onChange={handleChange}
               autoComplete="current-password"
+              required
             />
           </div>
 
@@ -59,8 +83,13 @@ export default function Login() {
             </span>
           </div>
 
-          <button type="submit" className="btn btn-primary btn-full" style={{ padding: '14px' }}>
-            Sign In
+          <button
+            type="submit"
+            className="btn btn-primary btn-full"
+            style={{ padding: '14px' }}
+            disabled={submitting}
+          >
+            {submitting ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
@@ -69,21 +98,6 @@ export default function Login() {
           <span className="auth-link" onClick={() => navigate('/register')}>
             Create one
           </span>
-        </div>
-
-        <div style={{ marginTop: 32, padding: 16, background: '#F8FAFF', borderRadius: 12, textAlign: 'center' }}>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 500 }}>
-            Demo — tap to auto-fill
-          </p>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => {
-              setForm({ email: 'sarah@example.com', password: 'password123' });
-            }}
-          >
-            Use demo account
-          </button>
         </div>
       </div>
     </div>

@@ -1,9 +1,19 @@
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-export default function BottomNav() {
+export default function BottomNav({ firstPetId }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { signOut } = useAuth();
   const path = location.pathname;
+
+  async function handleLogout() {
+    await signOut();
+    navigate('/', { replace: true });
+  }
+
+  const checklistRoute = firstPetId ? `/pets/${firstPetId}/checklist` : '/dashboard';
+  const photosRoute = firstPetId ? `/pets/${firstPetId}/proof-of-life` : '/dashboard';
 
   return (
     <nav className="bottom-nav">
@@ -27,7 +37,7 @@ export default function BottomNav() {
 
       <button
         className={`nav-item ${path.includes('/checklist') ? 'active' : ''}`}
-        onClick={() => navigate('/pets/1/checklist')}
+        onClick={() => navigate(checklistRoute)}
         aria-label="Today's checklist"
       >
         <span className="nav-icon">✅</span>
@@ -36,17 +46,16 @@ export default function BottomNav() {
 
       <button
         className={`nav-item ${path.includes('/proof') ? 'active' : ''}`}
-        onClick={() => navigate('/pets/1/proof-of-life')}
+        onClick={() => navigate(photosRoute)}
         aria-label="Photos"
       >
         <span className="nav-icon">📷</span>
         <span className="nav-label">Photos</span>
       </button>
 
-      {/* Logout — always accessible from bottom nav */}
       <button
         className="nav-item"
-        onClick={() => navigate('/')}
+        onClick={handleLogout}
         aria-label="Log out"
         style={{ color: 'var(--danger)' }}
       >

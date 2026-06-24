@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import BottomNav from '../components/BottomNav';
 import { samplePets } from '../data/sampleData';
@@ -11,7 +11,6 @@ const SAMPLE_PHOTOS = [
 ];
 
 export default function ProofOfLifeUpload() {
-  const navigate = useNavigate();
   const { id } = useParams();
   const pet = samplePets.find((p) => p.id === id) || samplePets[0];
 
@@ -28,7 +27,7 @@ export default function ProofOfLifeUpload() {
   const handleUpload = () => {
     if (!caption.trim()) return;
     const newPhoto = {
-      id: String(Date.now()),
+      id: crypto.randomUUID(),
       emoji: pet.emoji,
       caption: caption,
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),

@@ -1,18 +1,20 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../supabase';
+import { useAuth } from '../context/AuthContext';
 import BottomNav from '../components/BottomNav';
-import { samplePets, sampleUser } from '../data/sampleData';
+import { getPetEmoji, getPetGradient } from '../utils/petHelpers';
 
 function PetCard({ pet }) {
   const navigate = useNavigate();
-  const completedTasks = pet.dailyTasks.filter((t) => t.completed).length;
-  const totalTasks = pet.dailyTasks.length;
-  const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  const medCount = pet.medications?.length || 0;
+  const taskCount = pet.daily_tasks?.length || 0;
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       <div
         style={{
-          background: pet.gradient,
+          background: getPetGradient(pet.species),
           height: 80,
           display: 'flex',
           alignItems: 'center',
@@ -21,7 +23,7 @@ function PetCard({ pet }) {
           position: 'relative',
         }}
       >
-        {pet.emoji}
+        {getPetEmoji(pet.species)}
         <div
           style={{
             position: 'absolute',
@@ -43,25 +45,26 @@ function PetCard({ pet }) {
         <div style={{ marginBottom: 12 }}>
           <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{pet.name}</h3>
           <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-            {pet.breed} · {pet.age} yr{pet.age !== 1 ? 's' : ''} old
+            {pet.breed || 'Unknown breed'}
+            {pet.age != null ? ` · ${pet.age} yr${pet.age !== 1 ? 's' : ''} old` : ''}
           </p>
         </div>
 
         <div style={{ marginBottom: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-              Today&apos;s tasks
+              Daily tasks
             </span>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: progress === 100 ? 'var(--success)' : 'var(--text-muted)' }}>
-              {completedTasks}/{totalTasks}
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+              {taskCount} task{taskCount !== 1 ? 's' : ''}
             </span>
           </div>
           <div className="progress-bar-wrap">
-            <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+            <div className="progress-bar-fill" style={{ width: '0%' }} />
           </div>
         </div>
 
-        {pet.medications.length > 0 && (
+        {medCount > 0 && (
           <div
             style={{
               background: 'var(--danger-light)',
@@ -75,7 +78,7 @@ function PetCard({ pet }) {
           >
             <span style={{ fontSize: '0.875rem' }}>💊</span>
             <span style={{ fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 500 }}>
-              {pet.medications.length} medication{pet.medications.length > 1 ? 's' : ''}
+              {medCount} medication{medCount > 1 ? 's' : ''}
             </span>
           </div>
         )}
@@ -103,20 +106,47 @@ function PetCard({ pet }) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const [pets, setPets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const displayName = user?.email?.split('@')[0] || 'there';
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('pets')
+      .select('*, medications(*), daily_tasks(*)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) setError('Failed to load pets.');
+        else setPets(data || []);
+        setLoading(false);
+      });
+  }, [user]);
+
+  async function handleLogout() {
+    await signOut();
+    navigate('/', { replace: true });
+  }
+
+  const totalMeds = pets.reduce((acc, p) => acc + (p.medications?.length || 0), 0);
+  const totalTasks = pets.reduce((acc, p) => acc + (p.daily_tasks?.length || 0), 0);
 
   return (
     <div className="page">
-      {/* Header */}
       <header style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
               {greeting} 👋
             </p>
-            <h1 style={{ margin: 0, fontSize: '1.25rem' }}>{sampleUser.name.split(' ')[0]}</h1>
+            <h1 style={{ margin: 0, fontSize: '1.25rem' }}>{displayName}</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
@@ -127,7 +157,6 @@ export default function Dashboard() {
             >
               +
             </button>
-            {/* Avatar */}
             <div
               style={{
                 width: 38,
@@ -142,12 +171,11 @@ export default function Dashboard() {
                 fontSize: '0.9375rem',
               }}
             >
-              {sampleUser.name.charAt(0)}
+              {displayName.charAt(0).toUpperCase()}
             </div>
-            {/* Logout */}
             <button
               className="btn btn-sm"
-              onClick={() => navigate('/')}
+              onClick={handleLogout}
               title="Log out"
               style={{
                 background: 'var(--danger-light)',
@@ -166,24 +194,11 @@ export default function Dashboard() {
       </header>
 
       <div className="page-content">
-        {/* Summary strip */}
         <div style={{ display: 'flex', gap: 10 }}>
           {[
-            { label: 'Pets', value: samplePets.length, icon: '🐾', color: 'var(--primary)', bg: 'var(--primary-light)' },
-            {
-              label: 'Tasks Done',
-              value: samplePets.reduce((acc, p) => acc + p.dailyTasks.filter((t) => t.completed).length, 0),
-              icon: '✅',
-              color: 'var(--success)',
-              bg: 'var(--success-light)',
-            },
-            {
-              label: 'Pending',
-              value: samplePets.reduce((acc, p) => acc + p.dailyTasks.filter((t) => !t.completed).length, 0),
-              icon: '⏰',
-              color: 'var(--warning)',
-              bg: 'var(--warning-light)',
-            },
+            { label: 'Pets', value: pets.length, icon: '🐾', color: 'var(--primary)', bg: 'var(--primary-light)' },
+            { label: 'Medications', value: totalMeds, icon: '💊', color: 'var(--danger)', bg: 'var(--danger-light)' },
+            { label: 'Daily Tasks', value: totalTasks, icon: '📋', color: 'var(--warning)', bg: 'var(--warning-light)' },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -201,7 +216,6 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Pets section */}
         <div className="section-header">
           <span className="section-title">My Pets</span>
           <button
@@ -213,46 +227,71 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {samplePets.map((pet) => (
-          <PetCard key={pet.id} pet={pet} />
-        ))}
+        {error && (
+          <div style={{ background: 'var(--danger-light)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 8, fontSize: '0.875rem' }}>
+            {error}
+          </div>
+        )}
 
-        {/* Quick links */}
-        <div className="section-header" style={{ marginTop: 4 }}>
-          <span className="section-title">Quick Access</span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {[
-            { icon: '✅', label: "Today's Checklist", sub: 'View all tasks', route: '/pets/1/checklist', color: 'var(--success)', bg: 'var(--success-light)' },
-            { icon: '📷', label: 'Proof of Life', sub: 'Upload photos', route: '/pets/1/proof-of-life', color: 'var(--primary)', bg: 'var(--primary-light)' },
-          ].map((item) => (
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>
+            <p>Loading your pets...</p>
+          </div>
+        ) : pets.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: 12 }}>🐾</div>
+            <p style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 8 }}>No pets yet</p>
+            <p style={{ fontSize: '0.875rem', marginBottom: 16 }}>Add your first pet to get started</p>
             <button
-              key={item.label}
-              className="card"
-              onClick={() => navigate(item.route)}
-              style={{
-                background: item.bg,
-                border: 'none',
-                cursor: 'pointer',
-                textAlign: 'left',
-                padding: 14,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 6,
-              }}
+              className="btn btn-primary"
+              onClick={() => navigate('/pets/new')}
+              style={{ borderRadius: 10 }}
             >
-              <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: item.color }}>
-                {item.label}
-              </span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.sub}</span>
+              + Add Your First Pet
             </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          pets.map((pet) => <PetCard key={pet.id} pet={pet} />)
+        )}
+
+        {pets.length > 0 && (
+          <>
+            <div className="section-header" style={{ marginTop: 4 }}>
+              <span className="section-title">Quick Access</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                { icon: '✅', label: "Today's Checklist", sub: 'View all tasks', route: `/pets/${pets[0].id}/checklist`, color: 'var(--success)', bg: 'var(--success-light)' },
+                { icon: '📷', label: 'Proof of Life', sub: 'Upload photos', route: `/pets/${pets[0].id}/proof-of-life`, color: 'var(--primary)', bg: 'var(--primary-light)' },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  className="card"
+                  onClick={() => navigate(item.route)}
+                  style={{
+                    background: item.bg,
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    padding: 14,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: item.color }}>
+                    {item.label}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.sub}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      <BottomNav />
+      <BottomNav firstPetId={pets[0]?.id} />
     </div>
   );
 }

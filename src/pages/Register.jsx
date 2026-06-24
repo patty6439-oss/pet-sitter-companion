@@ -1,15 +1,46 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'owner' });
+  const { user, signUp, loading } = useAuth();
+  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', role: 'owner' });
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!loading && user) navigate('/dashboard', { replace: true });
+  }, [user, loading, navigate]);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate('/dashboard');
+    setError('');
+    setMessage('');
+
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setSubmitting(true);
+    const { data, error } = await signUp(form.email, form.password);
+    setSubmitting(false);
+
+    if (error) {
+      setError(error.message);
+    } else if (data?.user && !data?.session) {
+      setMessage('Check your email for a confirmation link, then sign in.');
+    } else {
+      navigate('/dashboard', { replace: true });
+    }
   };
 
   return (
@@ -24,21 +55,19 @@ export default function Register() {
         <h2 className="auth-title">Get started</h2>
         <p className="auth-subtitle">It&apos;s free and takes less than a minute</p>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="name">Full name</label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              className="form-input"
-              placeholder="Jane Smith"
-              value={form.name}
-              onChange={handleChange}
-              autoComplete="name"
-            />
+        {error && (
+          <div style={{ background: 'var(--danger-light)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 8, fontSize: '0.875rem', marginBottom: 16 }}>
+            {error}
           </div>
+        )}
 
+        {message && (
+          <div style={{ background: 'var(--success-light)', color: 'var(--success)', padding: '10px 14px', borderRadius: 8, fontSize: '0.875rem', marginBottom: 16 }}>
+            {message}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email address</label>
             <input
@@ -50,6 +79,7 @@ export default function Register() {
               value={form.email}
               onChange={handleChange}
               autoComplete="email"
+              required
             />
           </div>
 
@@ -97,10 +127,11 @@ export default function Register() {
               name="password"
               type="password"
               className="form-input"
-              placeholder="At least 8 characters"
+              placeholder="At least 6 characters"
               value={form.password}
               onChange={handleChange}
               autoComplete="new-password"
+              required
             />
           </div>
 
@@ -115,11 +146,17 @@ export default function Register() {
               value={form.confirmPassword}
               onChange={handleChange}
               autoComplete="new-password"
+              required
             />
           </div>
 
-          <button type="submit" className="btn btn-primary btn-full" style={{ padding: '14px' }}>
-            Create Account
+          <button
+            type="submit"
+            className="btn btn-primary btn-full"
+            style={{ padding: '14px' }}
+            disabled={submitting}
+          >
+            {submitting ? 'Creating account...' : 'Create Account'}
           </button>
         </form>
 
