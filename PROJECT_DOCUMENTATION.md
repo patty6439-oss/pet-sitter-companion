@@ -154,7 +154,12 @@ Authentication is handled entirely by **Supabase Auth**.
 | Email | `demo@test.com` |
 | Password | `TestPass99!` |
 
-This account has a pet named **Biscuit** (Golden Retriever, 3 yrs) pre-loaded with one medication (Apoquel) and two morning tasks (Morning Walk, Breakfast).
+This account has two pre-loaded pets:
+
+| Pet | Species | Breed | Age | Photo | Notes |
+|---|---|---|---|---|---|
+| **Biscuit** | Dog | Golden Retriever | 3 yrs | Emoji (🐕) | 1 medication (Apoquel), 2 morning tasks |
+| **Kit** | Cat | Domestic Shorthair Tabby | 11 yrs | `kit.jpg` (static asset) | Feeding and food instructions set |
 
 ---
 
@@ -164,7 +169,7 @@ This account has a pet named **Biscuit** (Golden Retriever, 3 yrs) pre-loaded wi
 - **Photo upload is text-only fallback:** If neither a file nor a caption is provided, the upload button is disabled. A file or caption is required.
 - **Proof-of-life requires a completed task:** Because `care_log_id` is NOT NULL in the schema, a photo can only be uploaded after at least one task has been checked off for the day.
 - **No real-time sync:** If two devices are logged in simultaneously, checklist state won't sync without a page refresh.
-- **Pet photo upload not implemented:** The "Add Photo" section on the Add/Edit Pet form shows "Coming soon" — pet profile images are represented by species emoji.
+- **Pet photo upload not implemented via UI:** The "Add Photo" section on the Add/Edit Pet form shows "Coming soon." The demo photo for Kit is a static asset (`public/kit.jpg`) with `photo_url` set directly in the database — not uploaded through the app.
 - **No password reset flow:** The "Forgot password?" link is present on the login page but does not navigate anywhere.
 - **No pagination:** The dashboard loads all pets and tasks at once. For accounts with many pets this could be slow.
 
@@ -175,7 +180,7 @@ This account has a pet named **Biscuit** (Golden Retriever, 3 yrs) pre-loaded wi
 - Integrate Supabase Storage for proper image hosting with CDN URLs
 - Add real-time subscription (`supabase.channel`) so checklist updates sync across devices instantly
 - Implement password reset via Supabase's built-in email flow
-- Add pet profile photo upload
+- Add pet profile photo upload through the UI (currently set via database only for the Kit demo)
 - Add owner-facing view (separate role) so pet owners can log in and see their pet's daily reports
 - Push notifications or email summaries when all tasks are completed
 - Multi-day history view for care logs and proof-of-life photos
@@ -228,11 +233,12 @@ npm run preview     # preview the production build locally
 Follow this sequence for a complete walkthrough:
 
 1. **Login screen** — show the branded login page; log in with the demo account
-2. **Dashboard** — point out the stats row (pets, medications, daily tasks), the Biscuit pet card with the progress bar showing "1/2 done", and the Quick Access buttons
-3. **Add a pet** — tap "+ Add Pet", fill in name/species/breed/age on the Basic Info tab, switch to the Care tab and add feeding instructions and forbidden foods, switch to the Medical tab and add a medication, then save
-4. **Pet profile** — open the new pet's profile; show the info sections (feeding, medications, daily tasks list)
-5. **Daily checklist** — open Biscuit's checklist; show the "0 of 2 completed" progress ring; check off "Morning Walk" and show the ring jump to 50%, the green progress bar, and the strikethrough; check off "Breakfast" and show "All done! 🎉"
-6. **Dashboard progress bar** — navigate back to the dashboard and show the pet card now reads "2/2 done" with a full green bar
-7. **Proof of Life** — tap "Proof of Life"; show the Biscuit banner with "2 tasks completed today"; select a completed task from the dropdown; add a caption; tap Upload and show the entry appear in the "Today's Photos" gallery
-8. **Edit & delete** — open the pet profile, tap Edit, change the breed, save; then show the delete button (do not delete if you want the data to persist for grading)
-9. **Logout** — tap Log out and confirm the redirect back to the login screen
+2. **Dashboard** — point out the stats row (pets, medications, daily tasks); scroll through both pet cards — Kit shows a real photo, Biscuit shows the dog emoji; note the live progress bars
+3. **Kit's profile** — tap "View Profile" on Kit; show the real cat photo in the banner, breed, age, feeding instructions, and approved/forbidden foods
+4. **Add a pet** — tap "+ Add Pet", fill in name/species/breed/age on the Basic Info tab, switch to the Care tab and add feeding instructions and forbidden foods, switch to the Medical tab and add a medication, then save
+5. **Pet profile** — open the new pet's profile; show the info sections (feeding, medications, daily tasks list)
+6. **Daily checklist** — open Biscuit's checklist; show the "0 of 2 completed" progress ring; check off "Morning Walk" and show the ring jump to 50%, the green progress bar, and the strikethrough; check off "Breakfast" and show "All done! 🎉"
+7. **Dashboard progress bar** — navigate back to the dashboard and show Biscuit's card now reads "2/2 done" with a full green bar
+8. **Proof of Life** — tap "Proof of Life" on Biscuit; show the banner with "2 tasks completed today"; select a completed task from the dropdown; add a caption; tap Upload and show the entry appear in the "Today's Photos" gallery
+9. **Edit & delete** — open a pet profile, tap Edit, change a field, save; then show the delete button (do not delete if you want the data to persist for grading)
+10. **Logout** — tap Log out and confirm the redirect back to the login screen
