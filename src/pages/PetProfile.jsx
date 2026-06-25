@@ -101,14 +101,17 @@ export default function PetProfile() {
           <div
             style={{
               background: getPetGradient(pet.species),
-              height: 140,
+              height: pet.photo_url ? 220 : 140,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '5rem',
+              overflow: 'hidden',
             }}
           >
-            {getPetEmoji(pet.species)}
+            {pet.photo_url
+              ? <img src={pet.photo_url} alt={pet.name} style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
+              : getPetEmoji(pet.species)}
           </div>
           <div style={{ padding: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

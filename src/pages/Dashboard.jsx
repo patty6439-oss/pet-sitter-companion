@@ -16,15 +16,18 @@ function PetCard({ pet, completedCount }) {
       <div
         style={{
           background: getPetGradient(pet.species),
-          height: 80,
+          height: pet.photo_url ? 160 : 80,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: '2.75rem',
           position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        {getPetEmoji(pet.species)}
+        {pet.photo_url
+          ? <img src={pet.photo_url} alt={pet.name} style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
+          : getPetEmoji(pet.species)}
         <div
           style={{
             position: 'absolute',
