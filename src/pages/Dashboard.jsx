@@ -5,10 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import BottomNav from '../components/BottomNav';
 import { getPetEmoji, getPetGradient } from '../utils/petHelpers';
 
-function PetCard({ pet }) {
+function PetCard({ pet, completedCount }) {
   const navigate = useNavigate();
   const medCount = pet.medications?.length || 0;
   const taskCount = pet.daily_tasks?.length || 0;
+  const progress = taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0;
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -56,11 +57,11 @@ function PetCard({ pet }) {
               Daily tasks
             </span>
             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-              {taskCount} task{taskCount !== 1 ? 's' : ''}
+              {completedCount}/{taskCount} done
             </span>
           </div>
           <div className="progress-bar-wrap">
-            <div className="progress-bar-fill" style={{ width: '0%' }} />
+            <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
           </div>
         </div>
 
@@ -108,6 +109,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [pets, setPets] = useState([]);
+  const [completionMap, setCompletionMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -118,14 +120,38 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!user) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+
     supabase
       .from('pets')
       .select('*, medications(*), daily_tasks(*)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) setError('Failed to load pets.');
-        else setPets(data || []);
+      .then(async ({ data, error }) => {
+        if (error) { setError('Failed to load pets.'); setLoading(false); return; }
+        const petList = data || [];
+        setPets(petList);
+
+        const allTaskIds = petList.flatMap((p) => (p.daily_tasks || []).map((t) => t.id));
+        if (allTaskIds.length > 0) {
+          const { data: logs } = await supabase
+            .from('care_logs')
+            .select('daily_task_id')
+            .in('daily_task_id', allTaskIds)
+            .gte('created_at', `${todayStr}T00:00:00`)
+            .lte('created_at', `${todayStr}T23:59:59`)
+            .eq('completed', true);
+
+          const taskToCount = {};
+          (logs || []).forEach((l) => { taskToCount[l.daily_task_id] = true; });
+
+          const map = {};
+          petList.forEach((p) => {
+            map[p.id] = (p.daily_tasks || []).filter((t) => taskToCount[t.id]).length;
+          });
+          setCompletionMap(map);
+        }
+
         setLoading(false);
       });
   }, [user]);
@@ -251,7 +277,7 @@ export default function Dashboard() {
             </button>
           </div>
         ) : (
-          pets.map((pet) => <PetCard key={pet.id} pet={pet} />)
+          pets.map((pet) => <PetCard key={pet.id} pet={pet} completedCount={completionMap[pet.id] || 0} />)
         )}
 
         {pets.length > 0 && (
